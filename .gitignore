@@ -2,7 +2,10 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+wandb
+speakers_all.csv
+reading-passage.txt
+speec-accent-archive.zip
 .vscode
 
 
