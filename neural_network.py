@@ -76,9 +76,9 @@ class Classifier(nn.Module):
 
 
 # TODO: Is this the right data to test with?
-def test_classifier(classifier, classifier_testing_loader, count, output_stats=False):
-    class_correct = [0] * count
-    class_total = [0] * count
+def test_classifier(classifier, classifier_testing_loader, count):
+    #class_correct = [0] * count
+    #class_total = [0] * count
 
     # used to calculate global f1
     all_labels = []
@@ -89,15 +89,12 @@ def test_classifier(classifier, classifier_testing_loader, count, output_stats=F
             images, labels = data
             outputs = classifier(images)
             _, predicted = torch.max(outputs, 1)
-            c = (predicted == labels).squeeze()
+            #c = (predicted == labels).squeeze()
 
             all_labels += labels
             all_predicted += predicted
 
     f1 = f1_score(all_labels, all_predicted, average="weighted")
-
-    if output_stats:
-        print(f"f1: {f1}")
 
     return f1
 
