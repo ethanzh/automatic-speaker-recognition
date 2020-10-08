@@ -1,4 +1,6 @@
 SpecAugment
+wandb
+kaggle
 natsort==7.0.1
 librosa==0.7.2
 dill==0.3.1.1
@@ -28,6 +30,6 @@ pyparsing==2.4.0
 python-dateutil==2.8.0
 pytz==2019.1
 PyYAML==5.1
-six==1.12.0
+six==1.13.0
 torchvision==0.2.2.post3
 tornado==6.0.2
