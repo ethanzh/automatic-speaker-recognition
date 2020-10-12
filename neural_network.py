@@ -107,10 +107,11 @@ def main():
     AUDIO_PATH = "audio"
     SOURCE_DIR = "accents_features"
     MODEL_PATH = "model.pt"
-    USE_CHECKPOINT = True
+    USE_CHECKPOINT = False
     BATCH_SIZE = 16
     NUM_EPOCHS = 400
     TRAIN_SPLIT = 0.2
+    TEST_SPLIT = 0.6
     LEARNING_RATE = 0.003
 
     dataset_dir = f"{AUDIO_PATH}/{SOURCE_DIR}"
@@ -119,13 +120,15 @@ def main():
     CLASSES = [f for f in os.listdir(dataset_dir) if f != ".DS_Store"]
 
     train_size = int(TRAIN_SPLIT * len(full_dataset))
-    test_size = len(full_dataset) - train_size
-    train_dataset, test_dataset = torch.utils.data.random_split(
-        full_dataset, [train_size, test_size]
+    test_size = int(TEST_SPLIT * len(full_dataset)) 
+    validation_size = len(full_dataset) - train_size - test_size
+    train_dataset, test_dataset, validation_dataset = torch.utils.data.random_split(
+        full_dataset, [train_size, test_size, validation_size]
     )
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
+    validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
 
     classifier = Classifier(num_classes=len(CLASSES))
     criterion = nn.CrossEntropyLoss()
@@ -171,7 +174,7 @@ def main():
 
         classifier.eval()
         validation_loss = 0.0
-        for batch_index, (inputs, labels) in enumerate(test_loader):
+        for batch_index, (inputs, labels) in enumerate(validation_loader):
             optimizer.zero_grad()
             outputs = classifier(inputs)
             loss = criterion(outputs, labels)
