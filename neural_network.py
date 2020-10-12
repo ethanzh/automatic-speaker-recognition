@@ -186,6 +186,7 @@ def main(use_checkpoint=True):
                 validation_loss = 0.0
 
         f1 = test_classifier(classifier, validation_loader, len(CLASSES))
+        wandb.log({'validation_f1': f1})
         print(f'INFO: F1 on validation set: {f1}')
 
         torch.save(
