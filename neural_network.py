@@ -23,8 +23,8 @@ from batcher import sample_from_mfcc
 from constants import NUM_FRAMES, SAMPLE_RATE
 from conv_models import DeepSpeakerModel
 
-# import wandb
-# wandb.init(project="automatic-speaker-recognition")
+import wandb
+wandb.init(project="automatic-speaker-recognition")
 
 
 class ClassifierDataset(Dataset):
@@ -109,8 +109,7 @@ def main(use_checkpoint=True, test=False):
     USE_CHECKPOINT = use_checkpoint
     BATCH_SIZE = 16
     NUM_EPOCHS = 400
-    TRAIN_SPLIT = 0.2
-    TEST_SPLIT = 0.6
+    TRAIN_SPLIT = 0.2  # therefore validation is 80%
     LEARNING_RATE = 0.003
 
     dataset_dir = f"{AUDIO_PATH}/{SOURCE_DIR}"
@@ -119,14 +118,12 @@ def main(use_checkpoint=True, test=False):
     CLASSES = [f for f in os.listdir(dataset_dir) if f != ".DS_Store"]
 
     train_size = int(TRAIN_SPLIT * len(full_dataset))
-    test_size = int(TEST_SPLIT * len(full_dataset)) 
-    validation_size = len(full_dataset) - train_size - test_size
-    train_dataset, test_dataset, validation_dataset = torch.utils.data.random_split(
-        full_dataset, [train_size, test_size, validation_size]
+    validation_size = len(full_dataset) - train_size 
+    train_dataset,validation_dataset = torch.utils.data.random_split(
+        full_dataset, [train_size, validation_size] 
     )
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
     validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
 
     classifier = Classifier(num_classes=len(CLASSES))
@@ -149,12 +146,12 @@ def main(use_checkpoint=True, test=False):
     # criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
     # disable weights when we aren't using junk
 
-    # wandb.watch(classifier)
+    wandb.watch(classifier)
 
     print('INFO: Starting training...')
     for epoch_num, epoch in enumerate(range(NUM_EPOCHS)):
 
-        # wandb.log({"epoch": initial_epoch_count + epoch_num + 1})
+        wandb.log({"epoch": initial_epoch_count + epoch_num + 1})
 
         classifier.train()
         running_loss = 0.0
@@ -169,7 +166,7 @@ def main(use_checkpoint=True, test=False):
             if batch_index % 120 == 119:
                 msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: loss: {running_loss / 120}"
                 print(msg)
-                # wandb.log({'train_loss': running_loss / 120})
+                wandb.log({'train_loss': running_loss / 120})
                 running_loss = 0.0
 
         classifier.eval()
@@ -185,8 +182,7 @@ def main(use_checkpoint=True, test=False):
             if batch_index % 120 == 119:
                 msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: loss: {validation_loss / 120}"
                 print(msg)
-                # wandb.log({'validation_loss': validation_loss / 120})
-
+                wandb.log({'validation_loss': validation_loss / 120})
                 validation_loss = 0.0
 
         f1 = test_classifier(classifier, validation_loader, len(CLASSES))
