@@ -99,7 +99,7 @@ def test_classifier(classifier, loader, count):
     return f1
 
 
-def main(use_checkpoint=True, test=False):
+def main(use_checkpoint=True):
     np.random.seed(1234)
     random.seed(1234)
 
