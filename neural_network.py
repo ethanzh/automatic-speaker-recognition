@@ -76,7 +76,7 @@ class Classifier(nn.Module):
 
 
 # TODO: Is this the right data to test with?
-def test_classifier(classifier, classifier_testing_loader, count):
+def test_classifier(classifier, loader, count):
     #class_correct = [0] * count
     #class_total = [0] * count
 
@@ -84,12 +84,12 @@ def test_classifier(classifier, classifier_testing_loader, count):
     all_labels = []
     all_predicted = []
 
+    classifier.eval()
     with torch.no_grad():
-        for data in classifier_testing_loader:
+        for data in loader:
             images, labels = data
             outputs = classifier(images)
             _, predicted = torch.max(outputs, 1)
-            #c = (predicted == labels).squeeze()
 
             all_labels += labels
             all_predicted += predicted
@@ -99,15 +99,14 @@ def test_classifier(classifier, classifier_testing_loader, count):
     return f1
 
 
-def main():
-    print('INFO: Starting training...')
+def main(use_checkpoint=True, test=False):
     np.random.seed(1234)
     random.seed(1234)
 
     AUDIO_PATH = "audio"
     SOURCE_DIR = "accents_features"
     MODEL_PATH = "model.pt"
-    USE_CHECKPOINT = False
+    USE_CHECKPOINT = use_checkpoint
     BATCH_SIZE = 16
     NUM_EPOCHS = 400
     TRAIN_SPLIT = 0.2
@@ -152,6 +151,7 @@ def main():
 
     # wandb.watch(classifier)
 
+    print('INFO: Starting training...')
     for epoch_num, epoch in enumerate(range(NUM_EPOCHS)):
 
         # wandb.log({"epoch": initial_epoch_count + epoch_num + 1})
@@ -189,6 +189,9 @@ def main():
 
                 validation_loss = 0.0
 
+        f1 = test_classifier(classifier, validation_loader, len(CLASSES))
+        print(f'INFO: F1 on validation set: {f1}')
+
         torch.save(
             {
                 "epoch": initial_epoch_count + epoch_num,
@@ -199,13 +202,5 @@ def main():
         )
 
 
-"""
-classifier = Classifier(num_classes=len(classes))
-checkpoint = torch.load(MODEL_PATH)
-classifier.load_state_dict(checkpoint['model_state_dict'])
-classifier.eval()
-f1 = test_classifier(classifier, test_loader, len(classes), output_stats=True)
-"""
-
 if __name__ == "__main__":
-    main()
+    main(use_checkpoint=False)
