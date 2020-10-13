@@ -31,20 +31,31 @@ class ClassifierDataset(Dataset):
     """Load numpy files from directory structure where each numpy file represents
     the extracted features from the pre-trained model"""
 
-    def __init__(self, directory):
+    def __init__(self, in_speakers, out_speakers, dataset_dir):
         outputs = []
         labels = []
 
-        speakers = [f for f in os.listdir(directory) if f != ".DS_Store"]
-        for i, speaker in enumerate(speakers):
-            for clip in os.listdir(f"{directory}/{speaker}"):
+        for i, speaker in enumerate(in_speakers):
+            for clip in os.listdir(f"{dataset_dir}/{speaker}"):
                 if "npy" not in clip:
                     continue
 
-                output = np.load(f"{directory}/{speaker}/{clip}")
+                output = np.load(f"{dataset_dir}/{speaker}/{clip}")
 
                 outputs.append(output)
                 labels.append(i)
+
+        none_index = len(set(labels))
+
+        for speaker in out_speakers: 
+            for clip in os.listdir(f"{dataset_dir}/{speaker}"):
+                if "npy" not in clip:
+                    continue
+
+                output = np.load(f"{dataset_dir}/{speaker}/{clip}")
+
+                outputs.append(output)
+                labels.append(none_index)
 
         self.outputs = np.array(outputs)
         self.labels = np.array(labels)
@@ -109,13 +120,23 @@ def main(use_checkpoint=True):
     USE_CHECKPOINT = use_checkpoint
     BATCH_SIZE = 16
     NUM_EPOCHS = 400
-    TRAIN_SPLIT = 0.2  # therefore validation is 80%
+    TRAIN_SPLIT = 0.8
     LEARNING_RATE = 0.003
+    IN_SPEAKER_RATIO = 0.8
 
     dataset_dir = f"{AUDIO_PATH}/{SOURCE_DIR}"
-    full_dataset = ClassifierDataset(dataset_dir)
+    all_speakers = [s for s in os.listdir(dataset_dir) if s != '.DS_Store']
 
-    CLASSES = [f for f in os.listdir(dataset_dir) if f != ".DS_Store"]
+    random.shuffle(all_speakers)
+
+    in_speakers_index = int(len(all_speakers) * IN_SPEAKER_RATIO)
+    in_speakers = all_speakers[:in_speakers_index]
+    out_speakers = all_speakers[in_speakers_index:]
+
+    full_dataset = ClassifierDataset(in_speakers, out_speakers, dataset_dir)
+
+    # account for the null class
+    NUM_CLASSES = len(all_speakers) + 1
 
     train_size = int(TRAIN_SPLIT * len(full_dataset))
     validation_size = len(full_dataset) - train_size 
@@ -126,9 +147,16 @@ def main(use_checkpoint=True):
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
     validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
 
-    classifier = Classifier(num_classes=len(CLASSES))
-    criterion = nn.CrossEntropyLoss()
+    # TODO: Make these weights make more sense
+    weights = [1] * NUM_CLASSES
+    weights[-1] = 0.01
+    weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
+
+    classifier = Classifier(num_classes=NUM_CLASSES)
+    criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
     optimizer = optim.Adam(classifier.parameters(), lr=LEARNING_RATE)
+
+    # disable weights when we aren't using junk
     initial_epoch_count = 0
 
     if USE_CHECKPOINT:
@@ -138,13 +166,6 @@ def main(use_checkpoint=True):
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         initial_epoch_count = checkpoint["epoch"]
         print(f"INFO: Beginning from epoch {initial_epoch_count}")
-
-    # weights = [subject_weight] * num_classes
-    # weights[-1] = junk_weight
-    # weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
-
-    # criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
-    # disable weights when we aren't using junk
 
     wandb.watch(classifier)
 
@@ -185,7 +206,7 @@ def main(use_checkpoint=True):
                 wandb.log({'validation_loss': validation_loss / 120})
                 validation_loss = 0.0
 
-        f1 = test_classifier(classifier, validation_loader, len(CLASSES))
+        f1 = test_classifier(classifier, validation_loader, NUM_CLASSES)
         wandb.log({'validation_f1': f1})
         print(f'INFO: F1 on validation set: {f1}')
 
