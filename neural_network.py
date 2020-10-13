@@ -165,11 +165,9 @@ def main(use_checkpoint=True):
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
     validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
 
-    # TODO: Make these weights make more sense
-    weights = [count / total_clip_count for count in speaker_clip_counts]
-    print(weights)
-    #weights[-1] = 0.01
+    weights = [total_out_speaker_clips / count for count in speaker_clip_counts]
     weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
+    weights[-1] = 1
 
     classifier = Classifier(num_classes=NUM_CLASSES)
     criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
