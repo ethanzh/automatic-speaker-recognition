@@ -133,10 +133,28 @@ def main(use_checkpoint=True):
     in_speakers = all_speakers[:in_speakers_index]
     out_speakers = all_speakers[in_speakers_index:]
 
+    # for weighting keep track of number of clips for each speaker
+    speaker_clip_counts = []
+    for in_speaker in in_speakers:
+        clips = [c for c in os.listdir(f'{dataset_dir}/{in_speaker}') if c != '.DS_Store']
+        speaker_clip_counts.append(len(clips))
+
+    # sum all of the out_speaker clip counts for null classifier weight
+    total_out_speaker_clips = 0
+    for out_speaker in out_speakers:
+        clips = [c for c in os.listdir(f'{dataset_dir}/{out_speaker}') if c != '.DS_Store']
+        total_out_speaker_clips += len(clips)
+
+    speaker_clip_counts.append(total_out_speaker_clips)
+    total_clip_count = sum(speaker_clip_counts) + total_out_speaker_clips
+    print(f'INFO: In speaker count: {len(in_speakers)}. Total clip count: {total_clip_count}')
+
+    assert len(speaker_clip_counts) == len(in_speakers) + 1 
+
     full_dataset = ClassifierDataset(in_speakers, out_speakers, dataset_dir)
 
     # account for the null class
-    NUM_CLASSES = len(all_speakers) + 1
+    NUM_CLASSES = len(in_speakers) + 1
 
     train_size = int(TRAIN_SPLIT * len(full_dataset))
     validation_size = len(full_dataset) - train_size 
@@ -147,9 +165,7 @@ def main(use_checkpoint=True):
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
     validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
 
-    # TODO: Make these weights make more sense
-    weights = [1] * NUM_CLASSES
-    weights[-1] = 0.01
+    weights = [count / total_clip_count for count in speaker_clip_counts]
     weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
 
     classifier = Classifier(num_classes=NUM_CLASSES)
