@@ -23,8 +23,7 @@ from batcher import sample_from_mfcc
 from constants import NUM_FRAMES, SAMPLE_RATE
 from conv_models import DeepSpeakerModel
 
-#import wandb
-#wandb.init(project="automatic-speaker-recognition")
+import wandb
 
 
 class ClassifierDataset(Dataset):
@@ -110,7 +109,7 @@ def test_classifier(classifier, loader, count):
     return f1
 
 
-def main(use_checkpoint=True):
+def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
     np.random.seed(1234)
     random.seed(1234)
 
@@ -119,10 +118,11 @@ def main(use_checkpoint=True):
     MODEL_PATH = "model.pt"
     USE_CHECKPOINT = use_checkpoint
     BATCH_SIZE = 16
-    NUM_EPOCHS = 400
+    NUM_EPOCHS = num_epochs
     TRAIN_SPLIT = 0.8
     LEARNING_RATE = 0.003
-    IN_SPEAKER_RATIO = 0.8
+    IN_SPEAKER_RATIO = in_speaker_ratio or 0.8
+
 
     dataset_dir = f"{AUDIO_PATH}/{SOURCE_DIR}"
     all_speakers = [s for s in os.listdir(dataset_dir) if s != '.DS_Store']
@@ -184,12 +184,15 @@ def main(use_checkpoint=True):
         initial_epoch_count = checkpoint["epoch"]
         print(f"INFO: Beginning from epoch {initial_epoch_count}")
 
-    #wandb.watch(classifier)
+    wandb.init(project="automatic-speaker-recognition",
+        name=f'80% train 20% val in_speakers: {IN_SPEAKER_RATIO}')
+
+    wandb.watch(classifier)
 
     print('INFO: Starting training...')
     for epoch_num, epoch in enumerate(range(NUM_EPOCHS)):
 
-        #wandb.log({"epoch": initial_epoch_count + epoch_num + 1})
+        wandb.log({"epoch": initial_epoch_count + epoch_num + 1})
 
         classifier.train()
         running_loss = 0.0
@@ -204,7 +207,7 @@ def main(use_checkpoint=True):
             if batch_index % 120 == 119:
                 msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: loss: {running_loss / 120}"
                 print(msg)
-                #wandb.log({'train_loss': running_loss / 120})
+                wandb.log({'train_loss': running_loss / 120})
                 running_loss = 0.0
 
         classifier.eval()
@@ -220,11 +223,11 @@ def main(use_checkpoint=True):
             if batch_index % 120 == 119:
                 msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: loss: {validation_loss / 120}"
                 print(msg)
-                #wandb.log({'validation_loss': validation_loss / 120})
+                wandb.log({'validation_loss': validation_loss / 120})
                 validation_loss = 0.0
 
         f1 = test_classifier(classifier, validation_loader, NUM_CLASSES)
-        #wandb.log({'validation_f1': f1})
+        wandb.log({'validation_f1': f1})
         print(f'INFO: F1 on validation set: {f1}')
 
         torch.save(
@@ -236,6 +239,10 @@ def main(use_checkpoint=True):
             MODEL_PATH,
         )
 
+        wandb.save('model.pt')
+
 
 if __name__ == "__main__":
-    main(use_checkpoint=False)
+
+    for in_speaker_ratio in np.arange(0.5, 1.0, 0.1):
+        main(use_checkpoint=False, in_speaker_ratio=in_speaker_ratio)
