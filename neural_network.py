@@ -95,22 +95,27 @@ def test_classifier(classifier, loader, count):
     all_labels = []
     all_predicted = []
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     classifier.eval()
     with torch.no_grad():
         for data in loader:
             images, labels = data
+            images = images.to(device)
+            labels = labels.to(device)
             outputs = classifier(images)
+            outputs = outputs.to(device)
             _, predicted = torch.max(outputs, 1)
 
-            all_labels += labels
-            all_predicted += predicted
+            all_labels += [int(x) for x in labels]
+            all_predicted += [int(x) for x in predicted]
 
     f1 = f1_score(all_labels, all_predicted, average="weighted")
 
     return f1, all_labels, all_predicted
 
 
-def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
+def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=16, learning_rate=0.003, train_split=0.8):
     np.random.seed(1234)
     random.seed(1234)
 
@@ -122,18 +127,17 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
         print(torch.cuda.get_device_name(0))
         print('INFO: Memory Usage:')
         print('INFO: Allocated:', round(torch.cuda.memory_allocated(0)/1024**3,1), 'GB')
-        print('INFO: Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
+        print('INFO: Reserved:   ', round(torch.cuda.memory_reserved(0)/1024**3,1), 'GB')
 
-    AUDIO_PATH = "audio"
-    SOURCE_DIR = "accents_features"
-    MODEL_PATH = "model.pt"
+    AUDIO_PATH = 'audio'
+    SOURCE_DIR = 'accents_features'
+    MODEL_PATH = 'model.pt'
     USE_CHECKPOINT = use_checkpoint
-    BATCH_SIZE = 16
+    BATCH_SIZE = batch_size 
     NUM_EPOCHS = num_epochs
-    TRAIN_SPLIT = 0.8
-    LEARNING_RATE = 0.003
-    IN_SPEAKER_RATIO = in_speaker_ratio or 0.8
-
+    TRAIN_SPLIT = train_split 
+    LEARNING_RATE = learning_rate 
+    IN_SPEAKER_RATIO = in_speaker_ratio
 
     dataset_dir = f"{AUDIO_PATH}/{SOURCE_DIR}"
     all_speakers = [s for s in os.listdir(dataset_dir) if s != '.DS_Store']
@@ -179,8 +183,10 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
     weights = [total_out_speaker_clips / count for count in speaker_clip_counts]
     weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
     weights[-1] = 1
+    weights = weights.to(device)
 
     classifier = Classifier(num_classes=NUM_CLASSES).to(device)
+    print(next(classifier.parameters()).device)
     criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
     optimizer = optim.Adam(classifier.parameters(), lr=LEARNING_RATE)
 
@@ -195,9 +201,7 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
         initial_epoch_count = checkpoint["epoch"]
         print(f"INFO: Beginning from epoch {initial_epoch_count}")
 
-    wandb.init(project="automatic-speaker-recognition",
-        name=f'80% train 20% val in_speakers: {IN_SPEAKER_RATIO}')
-
+    wandb.init(project='automatic-speaker-recognition')
     wandb.watch(classifier)
 
     print('INFO: Starting training...')
@@ -209,9 +213,10 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
         running_loss = 0.0
         for batch_index, (inputs, labels) in enumerate(train_loader):
             optimizer.zero_grad()
-            inputs.to(device)
-            labels.to(device)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
             outputs = classifier(inputs)
+            outputs = outputs.to(device)
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
@@ -227,8 +232,10 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
         validation_loss = 0.0
         for batch_index, (inputs, labels) in enumerate(validation_loader):
             optimizer.zero_grad()
-            inputs.to(device)
-            labels.to(device)
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+            outputs = classifier(inputs)
+            outputs = outputs.to(device)
             outputs = classifier(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
@@ -241,29 +248,36 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
                 wandb.log({'validation_loss': validation_loss / 120})
                 validation_loss = 0.0
 
-        f1, all_labels, all_predicted = test_classifier(classifier, validation_loader, NUM_CLASSES)
+        # only perform 'expensive' computation of heatmap, f1 every 10th epoch
+        if epoch_num % 10 == 9:
+            f1, all_labels, all_predicted = test_classifier(classifier, validation_loader, NUM_CLASSES)
 
-        all_labels = np.array([int(x) for x in all_labels])
-        all_predicted = np.array([int(x) for x in all_predicted])
-        data = confusion_matrix(all_labels, all_predicted, normalize='true')
+            all_labels = np.array([int(x) for x in all_labels])
+            all_predicted = np.array([int(x) for x in all_predicted])
+            data = confusion_matrix(all_labels, all_predicted, normalize='true')
 
-        ax = sns.heatmap(data)
-        ax.invert_yaxis()
-        fig = ax.get_figure()
-        plt.legend([],[], frameon=False)
-        fig.savefig(f'heatmap-{epoch_num}.png') 
-        plt.clf()
-        plt.cla()
-        plt.close()
+            ax = sns.heatmap(data)
+            ax.invert_yaxis()
+            fig = ax.get_figure()
+            plt.legend([],[], frameon=False)
+            fig.savefig(f'heatmap-{epoch_num}.png') 
+            plt.clf()
+            plt.cla()
+            plt.close()
+            wandb.save(f'heatmap-{epoch_num}.png')
 
-        wandb.log({'validation_f1': f1})
-        print(f'INFO: F1 on validation set: {f1}')
+            wandb.log({'validation_f1': f1})
+            print(f'INFO: F1 on validation set: {f1}')
 
         torch.save(
             {
-                "epoch": initial_epoch_count + epoch_num,
-                "model_state_dict": classifier.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
+                'epoch': initial_epoch_count + epoch_num,
+                'model_state_dict': classifier.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'batch_size': BATCH_SIZE,
+                'learning_rate': LEARNING_RATE,
+                'in_speaker_ratio': IN_SPEAKER_RATIO,
+                'train_split': TRAIN_SPLIT
             },
             MODEL_PATH,
         )
