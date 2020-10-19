@@ -114,6 +114,16 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
     np.random.seed(1234)
     random.seed(1234)
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print('INFO: Using device:', device)
+
+    #Additional Info when using cuda
+    if device.type == 'cuda':
+        print(torch.cuda.get_device_name(0))
+        print('INFO: Memory Usage:')
+        print('INFO: Allocated:', round(torch.cuda.memory_allocated(0)/1024**3,1), 'GB')
+        print('INFO: Cached:   ', round(torch.cuda.memory_cached(0)/1024**3,1), 'GB')
+
     AUDIO_PATH = "audio"
     SOURCE_DIR = "accents_features"
     MODEL_PATH = "model.pt"
@@ -170,7 +180,7 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
     weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
     weights[-1] = 1
 
-    classifier = Classifier(num_classes=NUM_CLASSES)
+    classifier = Classifier(num_classes=NUM_CLASSES).to(device)
     criterion = nn.CrossEntropyLoss(weight=weights, reduction='mean')
     optimizer = optim.Adam(classifier.parameters(), lr=LEARNING_RATE)
 
@@ -199,6 +209,8 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
         running_loss = 0.0
         for batch_index, (inputs, labels) in enumerate(train_loader):
             optimizer.zero_grad()
+            inputs.to(device)
+            labels.to(device)
             outputs = classifier(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
@@ -215,6 +227,8 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
         validation_loss = 0.0
         for batch_index, (inputs, labels) in enumerate(validation_loader):
             optimizer.zero_grad()
+            inputs.to(device)
+            labels.to(device)
             outputs = classifier(inputs)
             loss = criterion(outputs, labels)
             loss.backward()
