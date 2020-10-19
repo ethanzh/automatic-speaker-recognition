@@ -33,3 +33,4 @@ PyYAML==5.1
 six==1.13.0
 torchvision==0.2.2.post3
 tornado==6.0.2
+seaborn

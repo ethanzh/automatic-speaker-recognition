@@ -12,8 +12,9 @@ import tensorflow as tf
 import torch
 import torch.nn.functional as F
 import torch.optim as optim
+import seaborn as sns
 from pydub import AudioSegment
-from sklearn.metrics import f1_score
+from sklearn.metrics import f1_score, confusion_matrix, multilabel_confusion_matrix
 from tensorflow.python.keras import backend as K
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
@@ -106,7 +107,7 @@ def test_classifier(classifier, loader, count):
 
     f1 = f1_score(all_labels, all_predicted, average="weighted")
 
-    return f1
+    return f1, all_labels, all_predicted
 
 
 def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
@@ -205,7 +206,7 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
 
             running_loss += loss.item()
             if batch_index % 120 == 119:
-                msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: loss: {running_loss / 120}"
+                msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: train loss: {running_loss / 120}"
                 print(msg)
                 wandb.log({'train_loss': running_loss / 120})
                 running_loss = 0.0
@@ -221,12 +222,26 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
 
             validation_loss += loss.item()
             if batch_index % 120 == 119:
-                msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: loss: {validation_loss / 120}"
+                msg = f"INFO: [{initial_epoch_count + epoch_num + 1}, {batch_index + 1}]: val loss: {validation_loss / 120}"
                 print(msg)
                 wandb.log({'validation_loss': validation_loss / 120})
                 validation_loss = 0.0
 
-        f1 = test_classifier(classifier, validation_loader, NUM_CLASSES)
+        f1, all_labels, all_predicted = test_classifier(classifier, validation_loader, NUM_CLASSES)
+
+        all_labels = np.array([int(x) for x in all_labels])
+        all_predicted = np.array([int(x) for x in all_predicted])
+        data = confusion_matrix(all_labels, all_predicted, normalize='true')
+
+        ax = sns.heatmap(data)
+        ax.invert_yaxis()
+        fig = ax.get_figure()
+        plt.legend([],[], frameon=False)
+        fig.savefig(f'heatmap-{epoch_num}.png') 
+        plt.clf()
+        plt.cla()
+        plt.close()
+
         wandb.log({'validation_f1': f1})
         print(f'INFO: F1 on validation set: {f1}')
 
@@ -243,6 +258,6 @@ def main(use_checkpoint=False, in_speaker_ratio=None, num_epochs=200):
 
 
 if __name__ == "__main__":
-
-    for in_speaker_ratio in np.arange(0.5, 1.0, 0.1):
-        main(use_checkpoint=False, in_speaker_ratio=in_speaker_ratio)
+    main(use_checkpoint=False, in_speaker_ratio=0.8)
+    #for in_speaker_ratio in np.arange(0.5, 1.0, 0.1):
+        #main(use_checkpoint=False, in_speaker_ratio=in_speaker_ratio)
