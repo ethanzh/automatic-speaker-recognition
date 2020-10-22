@@ -110,9 +110,11 @@ def test_classifier(classifier, loader, count):
             all_labels += [int(x) for x in labels]
             all_predicted += [int(x) for x in predicted]
 
-    f1 = f1_score(all_labels, all_predicted, average="weighted")
+    weighted_f1 = f1_score(all_labels, all_predicted, average="weighted")
+    micro_f1 = f1_score(all_labels, all_predicted, average="micro")
+    macro_f1 = f1_score(all_labels, all_predicted, average="macro")
 
-    return f1, all_labels, all_predicted
+    return weighted_f1, micro_f1, macro_f1, all_labels, all_predicted
 
 
 def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=16, learning_rate=0.003, train_split=0.8):
@@ -208,6 +210,8 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
     for epoch_num, epoch in enumerate(range(NUM_EPOCHS)):
 
         wandb.log({"epoch": initial_epoch_count + epoch_num + 1})
+        wandb.log({"batch_size": BATCH_SIZE}) 
+        wandb.log({"learning_rate": LEARNING_RATE})
 
         classifier.train()
         running_loss = 0.0
@@ -250,7 +254,7 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
 
         # only perform 'expensive' computation of heatmap, f1 every 10th epoch
         if epoch_num % 10 == 9:
-            f1, all_labels, all_predicted = test_classifier(classifier, validation_loader, NUM_CLASSES)
+            weighted_f1, micro_f1, macro_f1, all_labels, all_predicted = test_classifier(classifier, validation_loader, NUM_CLASSES)
 
             all_labels = np.array([int(x) for x in all_labels])
             all_predicted = np.array([int(x) for x in all_predicted])
@@ -266,8 +270,12 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
             plt.close()
             wandb.save(f'heatmap-{epoch_num}.png')
 
-            wandb.log({'validation_f1': f1})
-            print(f'INFO: F1 on validation set: {f1}')
+            wandb.log({'validation_weighted_f1': weighted_f1})
+            wandb.log({'validation_micro_f1': micro_f1})
+            wandb.log({'validation_macro_f1': macro_f1})
+            print(f'INFO: Weighted F1 on validation set: {weighted_f1}')
+            print(f'INFO: Micro F1 on validation set: {micro_f1}')
+            print(f'INFO: Macro F1 on validation set: {macro_f1}')
 
         torch.save(
             {
@@ -286,6 +294,6 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
 
 
 if __name__ == "__main__":
-    main(use_checkpoint=False, in_speaker_ratio=0.8)
+    main(use_checkpoint=False, in_speaker_ratio=0.8, batch_size=32)
     #for in_speaker_ratio in np.arange(0.5, 1.0, 0.1):
         #main(use_checkpoint=False, in_speaker_ratio=in_speaker_ratio)
