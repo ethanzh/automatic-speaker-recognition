@@ -117,9 +117,9 @@ def test_classifier(classifier, loader, count):
     return weighted_f1, micro_f1, macro_f1, all_labels, all_predicted
 
 
-def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=16, learning_rate=0.003, train_split=0.8):
-    np.random.seed(1234)
-    random.seed(1234)
+def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=16, learning_rate=0.003, train_split=0.8, random_seed=1234):
+    np.random.seed(random_seed)
+    random.seed(random_seed)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('INFO: Using device:', device)
@@ -212,6 +212,7 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
         wandb.log({"epoch": initial_epoch_count + epoch_num + 1})
         wandb.log({"batch_size": BATCH_SIZE}) 
         wandb.log({"learning_rate": LEARNING_RATE})
+        wandb.log({"random_seed": random_seed})
 
         classifier.train()
         running_loss = 0.0
@@ -279,11 +280,11 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
 
         torch.save(
             {
-                'epoch': initial_epoch_count + epoch_num,
                 'model_state_dict': classifier.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'batch_size': BATCH_SIZE,
                 'learning_rate': LEARNING_RATE,
+                'random_seed': random_seed,
                 'in_speaker_ratio': IN_SPEAKER_RATIO,
                 'train_split': TRAIN_SPLIT
             },
@@ -294,6 +295,4 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
 
 
 if __name__ == "__main__":
-    main(use_checkpoint=False, in_speaker_ratio=0.8, batch_size=32)
-    #for in_speaker_ratio in np.arange(0.5, 1.0, 0.1):
-        #main(use_checkpoint=False, in_speaker_ratio=in_speaker_ratio)
+    main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=400, batch_size=32, random_seed=101)
