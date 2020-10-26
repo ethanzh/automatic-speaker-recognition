@@ -268,8 +268,8 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
             train_all_labels = np.array([int(x) for x in train_all_labels])
             train_all_predicted = np.array([int(x) for x in train_all_predicted])
 
-            validation_accuracy = accuracy_score(all_predicted, all_labels)
-            train_accuracy = accuracy_score(train_all_predicted, train_all_labels)
+            validation_accuracy = accuracy_score(all_predicted, all_labels, normalize=True)
+            train_accuracy = accuracy_score(train_all_predicted, train_all_labels, normalize=True)
             print(f'INFO: Accuracy on validation set: {validation_accuracy}')
             wandb.log({'validation_accuracy': validation_accuracy})
             print(f'INFO: Accuracy on train set: {train_accuracy}')
