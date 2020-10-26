@@ -14,7 +14,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 import seaborn as sns
 from pydub import AudioSegment
-from sklearn.metrics import f1_score, confusion_matrix, multilabel_confusion_matrix
+from sklearn.metrics import f1_score, confusion_matrix, multilabel_confusion_matrix, accuracy_score
 from tensorflow.python.keras import backend as K
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
@@ -254,11 +254,27 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
                 validation_loss = 0.0
 
         # only perform 'expensive' computation of heatmap, f1 every 10th epoch
-        if epoch_num % 10 == 9:
+        if epoch_num % 20 == 19:
             weighted_f1, micro_f1, macro_f1, all_labels, all_predicted = test_classifier(classifier, validation_loader, NUM_CLASSES)
+
+            train_weighted_f1, train_micro_f1, train_macro_f1, train_all_labels, train_all_predicted = test_classifier(classifier, train_loader, NUM_CLASSES)
+            wandb.log({'train_weighted_f1': train_weighted_f1})
+            wandb.log({'train_micro_f1': train_micro_f1})
+            wandb.log({'train_macro_f1': train_macro_f1})
 
             all_labels = np.array([int(x) for x in all_labels])
             all_predicted = np.array([int(x) for x in all_predicted])
+
+            train_all_labels = np.array([int(x) for x in train_all_labels])
+            train_all_predicted = np.array([int(x) for x in train_all_predicted])
+
+            validation_accuracy = accuracy_score(all_predicted, all_labels)
+            train_accuracy = accuracy_score(train_all_predicted, train_all_labels)
+            print(f'INFO: Accuracy on validation set: {validation_accuracy}')
+            wandb.log({'validation_accuracy': validation_accuracy})
+            print(f'INFO: Accuracy on train set: {train_accuracy}')
+            wandb.log({'train_accuracy': train_accuracy})
+
             data = confusion_matrix(all_labels, all_predicted, normalize='true')
 
             ax = sns.heatmap(data)
