@@ -181,9 +181,11 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
     train_dataset,validation_dataset = torch.utils.data.random_split(
         full_dataset, [train_size, validation_size] 
     )
+    noisy_validation_dataset = ClassifierDataset(all_speakers, [], 'audio/accents_noisy_features')
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
     validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
+    noisy_validation_loader = DataLoader(noisy_validation_dataset, batch_size=BATCH_SIZE)
 
     weights = [total_out_speaker_clips / count for count in speaker_clip_counts]
     weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
@@ -259,6 +261,15 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
         # only perform 'expensive' computation of heatmap, f1 every 10th epoch
         if epoch_num % 20 == 19:
             weighted_f1, micro_f1, macro_f1, all_labels, all_predicted = test_classifier(classifier, validation_loader, NUM_CLASSES)
+            wandb.log({'validation_weighted_f1': weighted_f1})
+            wandb.log({'validation_micro_f1': micro_f1})
+            wandb.log({'validation_macro_f1': macro_f1})
+            print(f'INFO: Weighted F1 on validation set: {weighted_f1}')
+
+            noisy_weighted_f1, noisy_micro_f1, noisy_macro_f1, noisy_all_labels, noisy_all_predicted = test_classifier(classifier, noisy_validation_loader, NUM_CLASSES)
+            wandb.log({'noisy_weighted_f1': noisy_weighted_f1})
+            wandb.log({'noisy_micro_f1': noisy_micro_f1})
+            wandb.log({'noisy_macro_f1': noisy_macro_f1})
 
             train_weighted_f1, train_micro_f1, train_macro_f1, train_all_labels, train_all_predicted = test_classifier(classifier, train_loader, NUM_CLASSES)
             wandb.log({'train_weighted_f1': train_weighted_f1})
@@ -271,11 +282,14 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
             train_all_labels = np.array([int(x) for x in train_all_labels])
             train_all_predicted = np.array([int(x) for x in train_all_predicted])
 
+            noisy_all_labels = np.array([int(x) for x in noisy_all_labels])
+            noisy_all_predicted = np.array([int(x) for x in noisy_all_predicted])
+
             validation_accuracy = accuracy_score(all_predicted, all_labels, normalize=True)
+            noisy_validation_accuracy = accuracy_score(noisy_all_predicted, noisy_all_labels, normalize=True)
             train_accuracy = accuracy_score(train_all_predicted, train_all_labels, normalize=True)
-            print(f'INFO: Accuracy on validation set: {validation_accuracy}')
             wandb.log({'validation_accuracy': validation_accuracy})
-            print(f'INFO: Accuracy on train set: {train_accuracy}')
+            wandb.log({'noisy_validation_accuracy': noisy_validation_accuracy})
             wandb.log({'train_accuracy': train_accuracy})
 
             data = confusion_matrix(all_labels, all_predicted, normalize='true')
@@ -290,12 +304,6 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
             plt.close()
             wandb.save(f'heatmap-{epoch_num}.png')
 
-            wandb.log({'validation_weighted_f1': weighted_f1})
-            wandb.log({'validation_micro_f1': micro_f1})
-            wandb.log({'validation_macro_f1': macro_f1})
-            print(f'INFO: Weighted F1 on validation set: {weighted_f1}')
-            print(f'INFO: Micro F1 on validation set: {micro_f1}')
-            print(f'INFO: Macro F1 on validation set: {macro_f1}')
 
         torch.save(
             {

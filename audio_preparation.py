@@ -19,12 +19,34 @@ from conv_models import DeepSpeakerModel
 
 AUDIO_PATH = "audio"
 SOURCE_DIR = "accents"  #'sherlock_holmes'
+NOISE_DIR = 'audio/noise'
+NOISY_ACCENTS_DIR = 'audio/accents_noisy_split'
 VERBOSE = False
 
 # ### First, trim large audio segments into 1 second clips
 def match_target_amplitude(sound, target_dBFS):
     change_in_dBFS = target_dBFS - sound.dBFS
     return sound.apply_gain(change_in_dBFS)
+
+
+def combine_audio(speaker_audio_path):
+    noise_clips = os.listdir(NOISE_DIR)
+    noise_clip = random.choice(noise_clips) 
+    noise_clip_path = f'{NOISE_DIR}/{noise_clip}'
+    noise_audio = AudioSegment.from_file(noise_clip_path)
+    speaker_audio = AudioSegment.from_file(speaker_audio_path)
+
+    noise_level = random.randint(15, 40)
+    noise_audio = match_target_amplitude(noise_audio, -noise_level)
+
+    combined_audio = speaker_audio.overlay(noise_audio)
+
+    speaker_name = speaker_audio_path.split('accents_split')[1].split('/')[1].split('/')[0]
+    clip_name = speaker_audio_path.split('accents_split')[1].split('/')[2]
+
+    combined_audio_path = f'{NOISY_ACCENTS_DIR}/{speaker_name}'
+    Path(combined_audio_path).mkdir(parents=True, exist_ok=True)
+    combined_audio.export(f'{combined_audio_path}/{clip_name}', format='wav')
 
 
 def split_audio(input_path: str, length=1, filetype=".wav"):
@@ -159,7 +181,20 @@ def generate_features(mfcc_path):
             )
 
 
-if __name__ == "__main__":
+def add_noise_to_splits():
+    speakers = os.listdir('audio/accents_split')
+    for speaker in speakers:
+        if speaker == '.DS_Store': continue
+
+        clips = os.listdir(f'audio/accents_split/{speaker}')
+        for clip in clips:
+            if clip == '.DS_Store': continue
+
+            path = f'audio/accents_split/{speaker}/{clip}'
+            combine_audio(path)
+
+
+def main():
     split_audio(f"{AUDIO_PATH}/{SOURCE_DIR}", length=1.5)
 
     generate_mfcc_for_dir(f"{AUDIO_PATH}/{SOURCE_DIR}_split")
@@ -170,3 +205,15 @@ if __name__ == "__main__":
     tf.executing_eagerly()
 
     generate_features(f"{AUDIO_PATH}/{SOURCE_DIR}_mfcc")
+
+
+if __name__ == "__main__":
+    path = 'audio/accents_noisy_split'
+    generate_mfcc_for_dir(path)
+
+    model = DeepSpeakerModel()
+    model.m.load_weights("ResCNN_triplet_training_checkpoint_265.h5", by_name=True)
+
+    tf.executing_eagerly()
+
+    generate_features('audio/accents_noisy_mfcc')
