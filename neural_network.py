@@ -182,10 +182,12 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
         full_dataset, [train_size, validation_size] 
     )
     noisy_validation_dataset = ClassifierDataset(all_speakers, [], 'audio/accents_noisy_features')
+    white_noisy_validation_dataset = ClassifierDataset(all_speakers, [], 'audio/accents_noisy_features_20dB')
 
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE)
     validation_loader = DataLoader(validation_dataset, batch_size=BATCH_SIZE)
     noisy_validation_loader = DataLoader(noisy_validation_dataset, batch_size=BATCH_SIZE)
+    white_noisy_validation_loader = DataLoader(white_noisy_validation_dataset, batch_size=BATCH_SIZE)
 
     weights = [total_out_speaker_clips / count for count in speaker_clip_counts]
     weights = torch.from_numpy(np.array(weights)).type(torch.FloatTensor)
@@ -270,6 +272,11 @@ def main(use_checkpoint=False, in_speaker_ratio=0.8, num_epochs=200, batch_size=
             wandb.log({'noisy_weighted_f1': noisy_weighted_f1})
             wandb.log({'noisy_micro_f1': noisy_micro_f1})
             wandb.log({'noisy_macro_f1': noisy_macro_f1})
+
+            white_noisy_weighted_f1, white_noisy_micro_f1, white_noisy_macro_f1, white_noisy_all_labels, white_noisy_all_predicted = test_classifier(classifier, white_noisy_validation_loader, NUM_CLASSES)
+            wandb.log({'white_noisy_weighted_f1': white_noisy_weighted_f1})
+            wandb.log({'white_noisy_micro_f1': white_noisy_micro_f1})
+            wandb.log({'white_noisy_macro_f1': white_noisy_macro_f1})
 
             train_weighted_f1, train_micro_f1, train_macro_f1, train_all_labels, train_all_predicted = test_classifier(classifier, train_loader, NUM_CLASSES)
             wandb.log({'train_weighted_f1': train_weighted_f1})

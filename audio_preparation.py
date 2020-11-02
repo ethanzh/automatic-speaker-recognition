@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from pydub import AudioSegment
+from pydub.generators import WhiteNoise
 from tensorflow.python.keras import backend as K
 from torch.utils.data import Dataset
 
@@ -21,12 +22,30 @@ AUDIO_PATH = "audio"
 SOURCE_DIR = "accents"  #'sherlock_holmes'
 NOISE_DIR = 'audio/noise'
 NOISY_ACCENTS_DIR = 'audio/accents_noisy_split'
+WHITE_NOISY_ACCENTS_DIR = 'audio/accents_whitenoise_split'
 VERBOSE = False
 
 # ### First, trim large audio segments into 1 second clips
 def match_target_amplitude(sound, target_dBFS):
     change_in_dBFS = target_dBFS - sound.dBFS
     return sound.apply_gain(change_in_dBFS)
+
+
+def combine_audio_with_white_noise(speaker_audio_path, DEST_PATH):
+    speaker_audio = AudioSegment.from_file(speaker_audio_path)
+    noise_audio = WhiteNoise().to_audio_segment(duration=len(speaker_audio))
+
+    for noise_level in range(20, 40, 5):
+        noise_audio = match_target_amplitude(noise_audio, -noise_level)
+
+        combined_audio = speaker_audio.overlay(noise_audio)
+
+        speaker_name = speaker_audio_path.split('accents_split')[1].split('/')[1].split('/')[0]
+        clip_name = speaker_audio_path.split('accents_split')[1].split('/')[2]
+
+        combined_audio_path = f'{DEST_PATH}_{noise_level}dB/{speaker_name}'
+        Path(combined_audio_path).mkdir(parents=True, exist_ok=True)
+        combined_audio.export(f'{combined_audio_path}/{clip_name}', format='wav')
 
 
 def combine_audio(speaker_audio_path):
@@ -181,7 +200,7 @@ def generate_features(mfcc_path):
             )
 
 
-def add_noise_to_splits():
+def add_noise_to_splits(is_whitenoise=False):
     speakers = os.listdir('audio/accents_split')
     for speaker in speakers:
         if speaker == '.DS_Store': continue
@@ -191,7 +210,10 @@ def add_noise_to_splits():
             if clip == '.DS_Store': continue
 
             path = f'audio/accents_split/{speaker}/{clip}'
-            combine_audio(path)
+            if is_whitenoise:
+                combine_audio_with_white_noise(path, DEST_PATH=NOISY_ACCENTS_DIR)
+            else:
+                combine_audio(path, DEST_PATH=NOISY_ACCENTS_DIR)
 
 
 def main():
@@ -199,21 +221,24 @@ def main():
 
     generate_mfcc_for_dir(f"{AUDIO_PATH}/{SOURCE_DIR}_split")
 
-    model = DeepSpeakerModel()
-    model.m.load_weights("ResCNN_triplet_training_checkpoint_265.h5", by_name=True)
-
-    tf.executing_eagerly()
 
     generate_features(f"{AUDIO_PATH}/{SOURCE_DIR}_mfcc")
 
 
 if __name__ == "__main__":
-    path = 'audio/accents_noisy_split'
-    generate_mfcc_for_dir(path)
+    # skip if already done
+    #add_noise_to_splits(is_whitenoise=True)
 
+    # needed to generate features
     model = DeepSpeakerModel()
     model.m.load_weights("ResCNN_triplet_training_checkpoint_265.h5", by_name=True)
-
     tf.executing_eagerly()
 
-    generate_features('audio/accents_noisy_mfcc')
+    paths = ['accents_noisy_split_20dB', 'accents_noisy_split_25dB', 'accents_noisy_split_30dB', 'accents_noisy_split_35dB']
+    for path in paths:
+        print(f'INFO: Generating MFCC for dir {path}')
+        generate_mfcc_for_dir(f'{AUDIO_PATH}/{path}')
+
+        mfcc_path = path.replace('split', 'mfcc')
+        print(f'INFO: Generating features for dir {mfcc_path}')
+        generate_features(f'{AUDIO_PATH}/{mfcc_path}')
