@@ -19,7 +19,7 @@ from constants import NUM_FRAMES, SAMPLE_RATE
 from conv_models import DeepSpeakerModel
 
 AUDIO_PATH = "audio"
-SOURCE_DIR = "accents"  #'sherlock_holmes'
+SOURCE_DIR = "sherlock_holmes"  #'sherlock_holmes'
 NOISE_DIR = 'audio/noise'
 NOISY_ACCENTS_DIR = 'audio/accents_noisy_split'
 WHITE_NOISY_ACCENTS_DIR = 'audio/accents_whitenoise_split'
@@ -217,28 +217,14 @@ def add_noise_to_splits(is_whitenoise=False):
 
 
 def main():
-    split_audio(f"{AUDIO_PATH}/{SOURCE_DIR}", length=1.5)
-
-    generate_mfcc_for_dir(f"{AUDIO_PATH}/{SOURCE_DIR}_split")
-
-
-    generate_features(f"{AUDIO_PATH}/{SOURCE_DIR}_mfcc")
-
-
-if __name__ == "__main__":
-    # skip if already done
-    #add_noise_to_splits(is_whitenoise=True)
-
-    # needed to generate features
     model = DeepSpeakerModel()
     model.m.load_weights("ResCNN_triplet_training_checkpoint_265.h5", by_name=True)
     tf.executing_eagerly()
 
-    paths = ['accents_noisy_split_20dB', 'accents_noisy_split_25dB', 'accents_noisy_split_30dB', 'accents_noisy_split_35dB']
-    for path in paths:
-        print(f'INFO: Generating MFCC for dir {path}')
-        generate_mfcc_for_dir(f'{AUDIO_PATH}/{path}')
+    split_audio(f"{AUDIO_PATH}/{SOURCE_DIR}", length=1.5)
+    generate_mfcc_for_dir(f"{AUDIO_PATH}/{SOURCE_DIR}_split")
+    generate_features(f"{AUDIO_PATH}/{SOURCE_DIR}_mfcc")
 
-        mfcc_path = path.replace('split', 'mfcc')
-        print(f'INFO: Generating features for dir {mfcc_path}')
-        generate_features(f'{AUDIO_PATH}/{mfcc_path}')
+
+if __name__ == "__main__":
+    main()
